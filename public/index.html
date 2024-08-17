@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard</title>
+</head>
+<body>
+  <h1>Clientes Ativos</h1>
+  <div id="clientes-ativos">Carregando...</div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Fazendo a requisição para obter os dados dos clientes
+      fetch('/resultado')
+        .then(response => response.json())
+        .then(data => {
+          const clientesDiv = document.getElementById('clientes-ativos');
+          const resultado = data.resultado; // Acessa o campo "resultado" do JSON
+
+          clientesDiv.innerHTML = `Clientes ativos: ${resultado !== undefined ? resultado : 'Nenhum resultado encontrado'}`;
+        })
+        .catch(error => console.error('Erro ao carregar os dados:', error));
+    });
+  </script>
+</body>
+</html>
