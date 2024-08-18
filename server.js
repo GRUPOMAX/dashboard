@@ -2,20 +2,17 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const request = require('request');
-const { exec } = require('child_process'); // Adicionado para executar o script externo
+const { exec } = require('child_process');
 
 const app = express();
 const port = 3001;
 
-// Middleware para servir arquivos estáticos da pasta public
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Rota para a página inicial
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Rota para obter a contagem filtrada
 app.get('/data', (req, res) => {
   fs.readFile(path.join(__dirname, 'Data', 'filtered_count.json'), 'utf8', (err, data) => {
     if (err) {
@@ -23,7 +20,6 @@ app.get('/data', (req, res) => {
       res.status(500).send('Erro ao ler o arquivo JSON');
       return;
     }
-
     let jsonData;
     try {
       jsonData = JSON.parse(data);
@@ -32,12 +28,10 @@ app.get('/data', (req, res) => {
       res.status(500).send('Erro ao parsear o arquivo JSON');
       return;
     }
-
     res.json(jsonData);
   });
 });
 
-// Rota para obter o resultado
 app.get('/resultado', (req, res) => {
   const resultadoPath = path.join(__dirname, 'public', 'resultado.json');
   res.sendFile(resultadoPath, err => {
@@ -48,7 +42,6 @@ app.get('/resultado', (req, res) => {
   });
 });
 
-// Rota para obter o bairros_count
 app.get('/bairros', (req, res) => {
   const bairrosPath = path.join(__dirname, 'public', 'bairros_count.json');
   res.sendFile(bairrosPath, err => {
@@ -59,7 +52,6 @@ app.get('/bairros', (req, res) => {
   });
 });
 
-// Rota para obter clientesAtivos.json
 app.get('/clientesAtivos', (req, res) => {
   const clientesAtivosPath = path.join(__dirname, 'Data', 'clientesAtivos.json');
   res.sendFile(clientesAtivosPath, err => {
@@ -70,7 +62,6 @@ app.get('/clientesAtivos', (req, res) => {
   });
 });
 
-// Rota para obter filtered_count.json
 app.get('/filtered_count', (req, res) => {
   const filteredCountPath = path.join(__dirname, 'Data', 'filtered_count.json');
   res.sendFile(filteredCountPath, err => {
@@ -81,9 +72,7 @@ app.get('/filtered_count', (req, res) => {
   });
 });
 
-// Função para atualizar o arquivo JSON com a contagem filtrada
 function updateData() {
-  // Opções para a primeira requisição à API
   const options1 = {
     method: 'POST',
     url: 'https://ixc.maxfibraltda.com.br/webservice/v1/cliente',
@@ -103,7 +92,6 @@ function updateData() {
     }
   };
 
-  // Opções para a segunda requisição à API
   const options2 = {
     method: 'POST',
     url: 'https://ixc.maxfibraltda.com.br/webservice/v1/cliente_contrato',
@@ -127,7 +115,6 @@ function updateData() {
     }
   };
 
-  // Requisição para a primeira API
   request(options1, (error1, response1, body1) => {
     if (error1) {
       console.error('Erro na requisição à API de clientes:', error1);
@@ -142,38 +129,43 @@ function updateData() {
       return;
     }
 
-    // Requisição para a segunda API
-    request(options2, (error2, response2, body2) => {
-      if (error2) {
-        console.error('Erro na requisição à API de contratos:', error2);
+    const clientesAtivosPath = path.join(__dirname, 'Data', 'clientesAtivos.json');
+    fs.writeFile(clientesAtivosPath, JSON.stringify(jsonResponse1, null, 2), (err) => {
+      if (err) {
+        console.error('Erro ao salvar o arquivo clientesAtivos.json:', err);
         return;
       }
+      console.log('Arquivo clientesAtivos.json salvo com sucesso.');
 
-      let jsonResponse2;
-      try {
-        jsonResponse2 = JSON.parse(body2);
-      } catch (parseError2) {
-        console.error('Erro ao parsear a resposta da API de contratos:', parseError2);
-        return;
-      }
-
-      // Filtra os dados para a quantidade desejada
-      let count = jsonResponse2.registros.filter(record => record.status_internet === 'CA').length;
-
-      // Salva a contagem em um arquivo JSON
-      const filePath = path.join(__dirname, 'Data', 'filtered_count.json');
-      fs.writeFile(filePath, JSON.stringify({ count }, null, 2), (err) => {
-        if (err) {
-          console.error('Erro ao salvar o arquivo JSON:', err);
-        } else {
-          console.log('Arquivo JSON atualizado com sucesso.');
+      request(options2, (error2, response2, body2) => {
+        if (error2) {
+          console.error('Erro na requisição à API de contratos:', error2);
+          return;
         }
+
+        let jsonResponse2;
+        try {
+          jsonResponse2 = JSON.parse(body2);
+        } catch (parseError2) {
+          console.error('Erro ao parsear a resposta da API de contratos:', parseError2);
+          return;
+        }
+
+        let count = jsonResponse2.registros.filter(record => record.status_internet === 'CA').length;
+        const filePath = path.join(__dirname, 'Data', 'filtered_count.json');
+        fs.writeFile(filePath, JSON.stringify({ count }, null, 2), (err) => {
+          if (err) {
+            console.error('Erro ao salvar o arquivo JSON:', err);
+          } else {
+            console.log('Arquivo JSON atualizado com sucesso.');
+            callAnalyzeBairros(); // Chama o script analyzeBairros.js após salvar os dados
+          }
+        });
       });
     });
   });
 }
 
-// Função para chamar o script analyzeBairros.js
 function callAnalyzeBairros() {
   exec('node Data/analyzeBairros.js', (error, stdout, stderr) => {
     if (error) {
@@ -188,14 +180,10 @@ function callAnalyzeBairros() {
   });
 }
 
-// Atualiza os dados imediatamente ao iniciar o servidor
 updateData();
 
-// Chama o script analyzeBairros.js
-callAnalyzeBairros();
+setInterval(updateData, 2 * 60 * 60 * 1000);  // 2 horas em milissegundos
 
-// Atualiza os dados a cada 1 minuto
-setInterval(updateData, 1 * 60 * 1000);  // 1 minuto em milissegundos
 
 app.listen(port, () => {
   console.log(`Servidor ouvindo na porta ${port}`);
